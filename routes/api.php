@@ -1,17 +1,17 @@
 <?php
 
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UserController;
-use App\Models\User;
-use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Request;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/status', function () {
-    return response()->json(
-        [
-            "Status" => "Ok",
-            "Message" => "Bem vindo a minha api sua delícia"
-        ], 200
-    );
+Route::post('/login', [UserController::class, 'login']);
+Route::post('/signup', [UserController::class, 'store']);
+
+Route::middleware('auth:sanctum')->group(function () {
+     Route::post('/logout', [UserController::class, 'logout']);
+    Route::get('/profile', [ProfileController::class, 'show']);
+    Route::post('/profile', [ProfileController::class, 'update']);
 });
 
-Route::apiResource('users', UserController::class);
+

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
 class UserController extends Controller
 {
@@ -14,7 +15,7 @@ class UserController extends Controller
     public function index(Request $request)
     {
         $users = User::query()
-            ->when($request->has('search'), function ($query) use ($request) {
+            ->when($request->filled('search'), function ($query) use ($request) {
                 $query->where('name', 'like', '%' . $request->search . '%');
             })
             ->paginate(10);
@@ -77,9 +78,9 @@ class UserController extends Controller
         $user = User::findOrFail($id);
 
         $validated = $request->validate([
-            'name' => 'nullable|string|max:255',
-            'email' => 'nullable|string|email|max:255|unique:users,email,' . $id,
-            'password' => 'nullable|string|min:8|confirmed'
+            'name' => 'sometimes|string|max:255',
+            'email' => 'sometimes|string|email|max:255|unique:users,email,' . $id,
+            'password' => 'sometimes|string|min:8|confirmed'
         ]);
 
         $user->update([
@@ -90,8 +91,9 @@ class UserController extends Controller
 
         return response()->json([
             'status' => 'success',
+            'message' => 'Usuário atualizado com sucesso.',
             'data' => $user
-        ], 200);
+        ]);
     }
 
     /**
@@ -106,5 +108,46 @@ class UserController extends Controller
             'status' => 'success',
             'message' => 'Usuário deletado com sucesso'
         ], 200);
+    }
+
+    public function login(Request $request)
+    {
+        $credentials = $request->validate([
+            'email' => 'required|email',
+            'password' => 'required'
+        ], [
+            'email.required' => 'Campo e-mail obrigatório.',
+            'email.email' => 'Formato de e-mail inválido.',
+            'password.required' => 'Campo senha obrigatório.'
+        ]);
+
+        $user = User::where('email', $credentials['email'])->first();
+
+        if (!$user || !Hash::check($credentials['password'], $user->password)) {
+            throw ValidationException::withMessages([
+                'email' => ['Credenciais inválidas.']
+            ]);
+        }
+        $token = $user->createToken('authToken')->plainTextToken;
+
+        return response()->json([
+            'message' => 'Login realizado com sucesso.',
+            'user' => $user,
+            'token' => $token
+        ])
+            ->cookie('auth_token', $token, 60 * 24, '/', null, true, true);
+    }
+
+    public function logout(Request $request)
+    {
+        // Revoga o token atual do usuário
+        $request->user()->currentAccessToken()->delete();
+
+        // Remove o cookie
+        $cookie = cookie()->forget('auth_token');
+
+        return response()->json([
+            'message' => 'Logout realizado com sucesso.'
+        ])->withCookie($cookie);
     }
 }
